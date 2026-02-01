@@ -1,0 +1,105 @@
+local tool = script.Parent
+local replicatedStorage = game.ReplicatedStorage
+local player = game.Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local mouse = player:GetMouse()
+local lightingService = game:GetService('Lighting')
+local abilityRemotes = replicatedStorage.Remotes.Characters["Yhwach (TYBW)"].SanktBogen
+local SanktBogenCS = abilityRemotes.SanktBogenCS
+local SanktBogenRemote = abilityRemotes.SanktBogen
+local COOLDOWN = 4.5
+local onCooldown = false
+local abilityActive = false
+local blackAndWhite = lightingService:FindFirstChild('BlackAndWhite')
+local whiteAndBlack = lightingService:FindFirstChild('WhiteAndBlack')
+local if1 = lightingService:FindFirstChild('IF1')
+local CameraShaker = require(game.ReplicatedStorage:WaitForChild("CameraShaker"))
+local camShake = CameraShaker.new(Enum.RenderPriority.Camera.Value, function(shakeCFrame)
+	camera.CFrame = camera.CFrame * shakeCFrame
+end)
+camShake:Start()
+-- Little impact frame
+local function playColorCorrectionEffect()
+	if not blackAndWhite or not whiteAndBlack then return end
+	blackAndWhite.Enabled = true
+	task.wait(0.08)
+	blackAndWhite.Enabled = false
+	whiteAndBlack.Enabled = true
+	task.wait(0.08)
+	whiteAndBlack.Enabled = false
+end
+-- We get the position of where the arrows will hit and make sure it is on the floor.
+local function getFloorPosition()
+	local rayOrigin = camera.CFrame.Position
+	local rayDirection = (mouse.Hit.Position - rayOrigin).Unit * 1000
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+	local filterList = {player.Character}
+	for _, obj in pairs(workspace:GetChildren()) do
+		if obj:IsA("BasePart") and obj.CanCollide == false and obj.Transparency > 0.5 then
+			table.insert(filterList, obj)
+		end
+	end
+	raycastParams.FilterDescendantsInstances = filterList
+	local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+	if raycastResult then
+		return raycastResult.Position
+	else
+		return mouse.Hit.Position
+	end
+end
+-- We fire the arrows with the SanktBogenCS remote along with their in between delay and their position.
+local function fireArrows()
+	task.spawn(function()
+		SanktBogenCS:FireServer(getFloorPosition(), 1)
+		task.wait(0.3)
+		SanktBogenCS:FireServer(getFloorPosition(), 2)
+		task.wait(0.3)
+		SanktBogenCS:FireServer(getFloorPosition(), 3)
+		task.wait(0.8)
+		SanktBogenCS:FireServer(getFloorPosition(), 4)
+		task.wait(0.5)
+		abilityActive = false
+	end)
+end
+-- Tool activation logic
+tool.Activated:Connect(function()
+	local character = player.Character
+	if not character then
+		return
+	end
+	if onCooldown then
+		return
+	end
+	if abilityActive then
+		return
+	end
+	if character:GetAttribute("Stunned") then
+		return
+	end
+	if character:GetAttribute("ActionLock") then
+		return
+	end
+	onCooldown = true
+	abilityActive = true
+	task.delay(COOLDOWN, function()
+		onCooldown = false
+	end)
+	local mousePosition = getFloorPosition()
+	local cameraCFrame = camera.CFrame
+	SanktBogenRemote:FireServer(mousePosition, cameraCFrame)
+	fireArrows()
+end)
+-- Client event (for the first 3 arrows)
+SanktBogenCS.OnClientEvent:Connect(function()
+	if if1 then
+		if1.Enabled = true
+		task.wait(0.05)
+		if1.Enabled = false
+	end
+end)
+-- Client event for the last arrow and a bomb like screenshake.
+SanktBogenRemote.OnClientEvent:Connect(function()
+	playColorCorrectionEffect()
+	camShake:Shake(CameraShaker.Presets.BombImpact)
+end)
