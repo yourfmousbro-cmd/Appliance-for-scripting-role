@@ -1,0 +1,49 @@
+local tool = script.Parent
+local replicatedStorage = game.ReplicatedStorage
+local player = game.Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- Remote references for Ichigo's Getsuga Slash ability
+local abilityRemotes = replicatedStorage.Remotes.Characters["Ichigo (Hollow Mask)"].GetsugaSlash
+local GetsugaSlashCS = abilityRemotes.GetsugaSlashCS
+local GetsugaSlashRemote = abilityRemotes.GetsugaSlash
+local equipRemote = abilityRemotes.equip
+
+-- Cooldown settings
+local COOLDOWN = 4.5
+local lastActivationTime = 0
+
+-- Camera shake setup
+local CameraShaker = require(game.ReplicatedStorage:WaitForChild("CameraShaker"))
+local camShake = CameraShaker.new(Enum.RenderPriority.Camera.Value, function(shakeCFrame)
+	camera.CFrame = camera.CFrame * shakeCFrame
+end)
+camShake:Start()
+
+-- Handle sword equipment/unequipment based on if the user is holding the tool.
+tool.Equipped:Connect(function()
+	equipRemote:FireServer("equipped")
+end)
+
+tool.Unequipped:Connect(function()
+	equipRemote:FireServer("unequipped")
+end)
+
+-- Handle ability activation with cooldown
+tool.Activated:Connect(function()
+	local character = player.Character
+	if not character then return end
+
+	local now = tick()
+	if now - lastActivationTime < COOLDOWN then
+		return
+	end
+
+	lastActivationTime = now
+	GetsugaSlashRemote:FireServer()
+end)
+
+-- Trigger camera shake when server confirms ability use
+GetsugaSlashCS.OnClientEvent:Connect(function()
+	camShake:Shake(CameraShaker.Presets.Explosion)
+end)
